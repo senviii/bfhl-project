@@ -13,7 +13,3 @@
 2. Drag and drop the `frontend/` folder
 3. Done — copy the URL
 
-## Submit
-- API URL: your render URL (base only, no /bfhl)
-- Frontend URL: your netlify URL
-- GitHub repo URL
