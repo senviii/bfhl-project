@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>BFHL — Node Hierarchy API</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Courier New', monospace; background: #fff; color: #111; padding: 40px 20px; max-width: 760px; margin: auto; }
+  h1 { font-size: 18px; font-weight: bold; letter-spacing: 1px; border-bottom: 2px solid #111; padding-bottom: 10px; margin-bottom: 6px; }
+  p.sub { font-size: 12px; color: #555; margin-bottom: 28px; }
+  label { font-size: 12px; font-weight: bold; display: block; margin-bottom: 6px; }
+  textarea {
+    width: 100%; height: 120px; border: 1px solid #ccc; padding: 10px;
+    font-family: 'Courier New', monospace; font-size: 13px; resize: vertical;
+    outline: none; background: #fafafa;
+  }
+  textarea:focus { border-color: #111; }
+  .hint { font-size: 11px; color: #777; margin-top: 5px; margin-bottom: 18px; }
+  button {
+    background: #111; color: #fff; border: none; padding: 10px 28px;
+    font-family: 'Courier New', monospace; font-size: 13px; cursor: pointer; letter-spacing: 1px;
+  }
+  button:hover { background: #333; }
+  button:disabled { background: #aaa; cursor: not-allowed; }
+  #error { color: #c00; font-size: 13px; margin-top: 14px; }
+  #result { margin-top: 28px; }
+  .section { margin-bottom: 20px; }
+  .section-title { font-size: 11px; font-weight: bold; letter-spacing: 2px; text-transform: uppercase; color: #777; margin-bottom: 8px; border-bottom: 1px solid #eee; padding-bottom: 4px; }
+  .tag { display: inline-block; background: #f0f0f0; border: 1px solid #ddd; padding: 2px 8px; font-size: 12px; margin: 2px; }
+  .tag.invalid { background: #fff0f0; border-color: #f99; }
+  .tag.dup { background: #fffbe6; border-color: #e6c700; }
+  .tree-card { border: 1px solid #ddd; padding: 12px 16px; margin-bottom: 10px; }
+  .tree-card .root-label { font-size: 13px; font-weight: bold; margin-bottom: 6px; }
+  .tree-card .badge { font-size: 10px; padding: 1px 6px; border: 1px solid; margin-left: 8px; font-weight: normal; }
+  .badge.cycle { color: #c00; border-color: #c00; }
+  .badge.tree { color: #060; border-color: #060; }
+  pre { font-size: 11px; background: #fafafa; border: 1px solid #eee; padding: 8px; overflow-x: auto; white-space: pre-wrap; }
+  .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .summary-box { border: 1px solid #ddd; padding: 12px; text-align: center; }
+  .summary-box .val { font-size: 22px; font-weight: bold; }
+  .summary-box .lbl { font-size: 10px; color: #777; margin-top: 4px; letter-spacing: 1px; text-transform: uppercase; }
+  .meta { font-size: 11px; color: #555; margin-bottom: 18px; }
+</style>
+</head>
+<body>
+
+<h1>BFHL / Node Hierarchy API</h1>
+<p class="sub">SRM Full Stack Engineering Challenge</p>
+
+<label for="apiUrl">API BASE URL</label>
+<input id="apiUrl" type="text" placeholder="https://your-api.onrender.com"
+  style="width:100%;border:1px solid #ccc;padding:8px 10px;font-family:'Courier New',monospace;font-size:13px;outline:none;margin-bottom:18px;background:#fafafa;"/>
+
+<label for="nodes">NODE STRINGS (comma or newline separated)</label>
+<textarea id="nodes" placeholder='A->B, A->C, B->D, X->Y, Y->Z, Z->X, hello, 1->2'></textarea>
+<div class="hint">Example: A->B, A->C, B->D, C->E</div>
+
+<button id="btn" onclick="submit()">SUBMIT</button>
+<div id="error"></div>
+<div id="result"></div>
+
+<script>
+async function submit() {
+  const url = document.getElementById('apiUrl').value.trim().replace(/\/+$/, '');
+  const raw = document.getElementById('nodes').value;
+  const err = document.getElementById('error');
+  const res = document.getElementById('result');
+  const btn = document.getElementById('btn');
+
+  err.textContent = '';
+  res.innerHTML = '';
+
+  if (!url) { err.textContent = 'Please enter the API base URL.'; return; }
+  if (!raw.trim()) { err.textContent = 'Please enter some node strings.'; return; }
+
+  const data = raw.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+
+  btn.disabled = true;
+  btn.textContent = 'LOADING...';
+
+  try {
+    const response = await fetch(`${url}/bfhl`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data })
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const json = await response.json();
+    render(json);
+  } catch (e) {
+    err.textContent = 'Error: ' + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'SUBMIT';
+  }
+}
+
+function render(d) {
+  const res = document.getElementById('result');
+
+  const inv = d.invalid_entries?.length
+    ? d.invalid_entries.map(e => `<span class="tag invalid">${e}</span>`).join(' ')
+    : '<span style="color:#999;font-size:12px">none</span>';
+
+  const dups = d.duplicate_edges?.length
+    ? d.duplicate_edges.map(e => `<span class="tag dup">${e}</span>`).join(' ')
+    : '<span style="color:#999;font-size:12px">none</span>';
+
+  const trees = (d.hierarchies || []).map(h => {
+    const badge = h.has_cycle
+      ? '<span class="badge cycle">CYCLE</span>'
+      : `<span class="badge tree">TREE — depth ${h.depth}</span>`;
+    const treeStr = h.has_cycle ? '{}' : JSON.stringify(h.tree, null, 2);
+    return `
+      <div class="tree-card">
+        <div class="root-label">Root: ${h.root} ${badge}</div>
+        <pre>${treeStr}</pre>
+      </div>`;
+  }).join('');
+
+  const lr = d.summary?.largest_tree_root || '—';
+
+  res.innerHTML = `
+    <div class="section">
+      <div class="section-title">Identity</div>
+      <div class="meta">${d.user_id} &nbsp;|&nbsp; ${d.email_id} &nbsp;|&nbsp; ${d.college_roll_number}</div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Summary</div>
+      <div class="summary-grid">
+        <div class="summary-box"><div class="val">${d.summary?.total_trees ?? 0}</div><div class="lbl">Trees</div></div>
+        <div class="summary-box"><div class="val">${d.summary?.total_cycles ?? 0}</div><div class="lbl">Cycles</div></div>
+        <div class="summary-box"><div class="val">${lr}</div><div class="lbl">Largest Tree Root</div></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Hierarchies (${(d.hierarchies||[]).length})</div>
+      ${trees}
+    </div>
+
+    <div class="section">
+      <div class="section-title">Invalid Entries</div>
+      <div>${inv}</div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Duplicate Edges</div>
+      <div>${dups}</div>
+    </div>
+  `;
+}
+</script>
+</body>
+</html>
